@@ -30,6 +30,12 @@ jobs:
       - name: Run Trivy Scan
         run: trivy image vulnerables/web-dvwa:latest
 
+      - name: Upload Trivy Report as Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: trivy-report
+          path: trivy-report.txt
+
         
   dynamic-scan:
     name: Dynamic Scan with Falco
