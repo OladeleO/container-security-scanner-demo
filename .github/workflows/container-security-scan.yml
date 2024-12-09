@@ -42,16 +42,27 @@ jobs:
           sudo mv ./kind /usr/local/bin/kind
           kind create cluster
 
+      - name: Install Helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+
       - name: Install Falco
         run: |
           helm repo add falcosecurity https://falcosecurity.github.io/charts
           helm repo update
           helm install falco falcosecurity/falco --namespace falco --create-namespace
 
+      - name: Create Service Account
+        run: |
+          kubectl create serviceaccount test-sa -n falco
+          kubectl create clusterrolebinding test-sa-binding \
+            --clusterrole=cluster-admin \
+            --serviceaccount=falco:test-sa
+
       - name: Deploy Vulnerable Container
         run: |
-          kubectl run vulnerable-app --image=vulnerable-container:latest --restart=Never
+          kubectl run vulnerable-app --image=vulnerables/web-dvwa:latest --restart=Never \
+            --namespace=falco --serviceaccount=test-sa
 
       - name: Monitor Runtime with Falco
-        run: |
-          kubectl logs -n falco -l app=falco
+        run: kubectl logs -n falco -l app=falco
