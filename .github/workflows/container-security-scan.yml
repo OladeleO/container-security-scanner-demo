@@ -61,8 +61,12 @@ jobs:
 
       - name: Deploy Vulnerable Container
         run: |
-          kubectl run vulnerable-app --image=vulnerables/web-dvwa:latest --restart=Never \
-            --namespace=falco --serviceaccount=test-sa
+          kubectl create deployment vulnerable-app \
+            --image=vulnerables/web-dvwa:latest \
+            -n falco
+          kubectl patch deployment vulnerable-app \
+            -n falco \
+            --patch '{"spec": {"template": {"spec": {"serviceAccountName": "test-sa"}}}}'
 
       - name: Monitor Runtime with Falco
         run: kubectl logs -n falco -l app=falco
