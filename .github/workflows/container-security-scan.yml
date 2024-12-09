@@ -69,6 +69,13 @@ jobs:
             --set falco.ebpf.enabled=true \
             --set falco.log_level=debug
 
+      - name: Create Service Account for Simulate Pod
+        run: |
+          kubectl create serviceaccount simulate-sa -n falco
+          kubectl create clusterrolebinding simulate-sa-binding \
+            --clusterrole=cluster-admin \
+            --serviceaccount=falco:simulate-sa
+
       - name: Wait for Falco Pods
         run: |
           echo "Waiting for Falco pods to become ready..."
@@ -76,7 +83,8 @@ jobs:
 
       - name: Simulate Falco Events
         run: |
-          kubectl run simulate-pod --image=alpine:latest --restart=Never -n falco -- sh -c "touch /etc/suspicious-file || true"
+          kubectl run simulate-pod --image=alpine:latest --restart=Never -n falco \
+            --serviceaccount=simulate-sa -- sh -c "touch /etc/suspicious-file || true"
           POD_NAME=$(kubectl get pods -n falco -l run=simulate-pod -o jsonpath="{.items[0].metadata.name}")
           kubectl exec -n falco $POD_NAME -- sh -c "cat /etc/shadow || true"
           kubectl delete pod simulate-pod -n falco --force --grace-period=0 || true
