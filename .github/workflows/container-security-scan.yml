@@ -19,10 +19,13 @@ jobs:
       - name: Install Trivy
         run: |
           curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh
+          echo "::add-path::$(pwd)/bin"
+
+      - name: Verify Trivy Installation
+        run: trivy --version
 
       - name: Run Trivy Scan
-        run: |
-          trivy image vulnerable-container:latest
+        run: trivy image vulnerable-container:latest
 
   dynamic-scan:
     name: Dynamic Scan with Falco
