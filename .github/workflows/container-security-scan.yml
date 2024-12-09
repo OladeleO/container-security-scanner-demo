@@ -56,14 +56,16 @@ jobs:
         run: |
           helm repo add falcosecurity https://falcosecurity.github.io/charts
           helm repo update
-          helm install falco falcosecurity/falco --namespace falco --create-namespace
+          helm install falco falcosecurity/falco --namespace falco --create-namespace \
+            --set falco.json_output=true \
+            --set falco.ebpf.enabled=true
 
-      - name: Create Service Account
+      - name: Verify Falco Deployment
         run: |
-          kubectl create serviceaccount test-sa -n falco
-          kubectl create clusterrolebinding test-sa-binding \
-            --clusterrole=cluster-admin \
-            --serviceaccount=falco:test-sa
+          echo "Verifying Falco pods"
+          kubectl get pods -n falco
+          kubectl get deployment falco -n falco
+          kubectl get events -n falco || true
 
       - name: Deploy Vulnerable Application
         run: |
@@ -90,7 +92,7 @@ jobs:
 
       - name: Collect Falco Logs
         run: |
-          kubectl logs -n falco -l app=falco > falco-logs.txt
+          kubectl logs -n falco -l app=falco > falco-logs.txt || echo "No logs found"
         continue-on-error: true
 
       - name: Upload Falco Logs as Artifact
