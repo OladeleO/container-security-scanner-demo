@@ -54,13 +54,15 @@ jobs:
               extraMounts:
                 - hostPath: /proc
                   containerPath: /host/proc
+                - hostPath: /lib/modules
+                  containerPath: /lib/modules
           EOF
 
       - name: Install Helm
         run: |
           curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
 
-      - name: Install Falco
+      - name: Install Falco with Debugging
         run: |
           helm repo add falcosecurity https://falcosecurity.github.io/charts
           helm repo update
@@ -69,41 +71,15 @@ jobs:
             --set falco.ebpf.enabled=true \
             --set falco.log_level=debug
 
-      - name: Create Service Account for Simulate Pod
-        run: |
-          kubectl create serviceaccount simulate-sa -n falco
-          kubectl create clusterrolebinding simulate-sa-binding \
-            --clusterrole=cluster-admin \
-            --serviceaccount=falco:simulate-sa
-
       - name: Wait for Falco Pods
         run: |
-          echo "Waiting for Falco pods to become ready..."
           kubectl wait --for=condition=ready pod -l app=falco -n falco --timeout=120s || echo "Falco pods not ready"
 
-      - name: Deploy Simulate Pod
+      - name: Simulate Falco Events
         run: |
-          cat <<EOF | kubectl apply -f -
-          apiVersion: v1
-          kind: Pod
-          metadata:
-            name: simulate-pod
-            namespace: falco
-          spec:
-            serviceAccountName: simulate-sa
-            containers:
-            - name: simulate-container
-              image: alpine:latest
-              command: ["/bin/sh", "-c"]
-              args: ["touch /etc/suspicious-file && cat /etc/shadow || true"]
-          EOF
-
-      - name: Wait for Simulate Pod Completion
-        run: |
-          kubectl wait --for=condition=Ready pod/simulate-pod -n falco --timeout=60s || echo "Simulate pod not ready"
-
-      - name: Clean Up Simulate Pod
-        run: |
+          kubectl run simulate-pod --image=alpine:latest --restart=Never -n falco -- sh -c "cat /etc/passwd || true"
+          POD_NAME=$(kubectl get pods -n falco -l run=simulate-pod -o jsonpath="{.items[0].metadata.name}")
+          kubectl exec -n falco $POD_NAME -- sh -c "touch /root/suspicious-file || true"
           kubectl delete pod simulate-pod -n falco --force --grace-period=0 || true
 
       - name: Collect Falco Logs
