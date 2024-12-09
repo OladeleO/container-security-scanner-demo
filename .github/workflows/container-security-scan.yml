@@ -1,0 +1,50 @@
+name: Container Security Scanning
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  static-scan:
+    name: Static Scan with Trivy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh
+
+      - name: Run Trivy Scan
+        run: |
+          trivy image vulnerable-container:latest
+
+  dynamic-scan:
+    name: Dynamic Scan with Falco
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Kubernetes Cluster (using kind)
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+          kind create cluster
+
+      - name: Install Falco
+        run: |
+          helm repo add falcosecurity https://falcosecurity.github.io/charts
+          helm repo update
+          helm install falco falcosecurity/falco --namespace falco --create-namespace
+
+      - name: Deploy Vulnerable Container
+        run: |
+          kubectl run vulnerable-app --image=vulnerable-container:latest --restart=Never
+
+      - name: Monitor Runtime with Falco
+        run: |
+          kubectl logs -n falco -l app=falco
