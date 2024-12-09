@@ -52,8 +52,8 @@ jobs:
           nodes:
             - role: control-plane
               extraMounts:
-                - hostPath: /lib/modules
-                  containerPath: /lib/modules
+                - hostPath: /proc
+                  containerPath: /host/proc
           EOF
 
       - name: Install Helm
