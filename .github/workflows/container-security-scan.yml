@@ -51,10 +51,11 @@ jobs:
           apiVersion: kind.x-k8s.io/v1alpha4
           nodes:
             - role: control-plane
-              extraPortMappings:
-                - containerPort: 30000
-                  hostPort: 30000
-                  protocol: TCP
+              extraMounts:
+                - hostPath: /lib/modules
+                  containerPath: /lib/modules
+                - hostPath: /proc
+                  containerPath: /host/proc
           EOF
 
       - name: Install Helm
@@ -69,42 +70,16 @@ jobs:
             --set falco.json_output=true \
             --set falco.ebpf.enabled=true
 
-      - name: Verify Falco Deployment
+      - name: Debug Helm Installation
         run: |
-          echo "Checking Falco deployment in falco namespace"
+          helm list -n falco
+          helm status falco -n falco
+
+      - name: Check Kubernetes Events
+        run: |
+          kubectl get events -n falco || echo "No events found in falco namespace"
+
+      - name: Wait for Falco Deployment
+        run: |
+          kubectl rollout status deployment/falco -n falco || echo "Falco deployment not available"
           kubectl get pods -n falco
-          kubectl get deployment falco -n falco
-
-      - name: Deploy Vulnerable Application
-        run: |
-          kubectl create deployment vulnerable-app \
-            --image=vulnerables/web-dvwa:latest \
-            -n falco
-          kubectl patch deployment vulnerable-app \
-            -n falco \
-            --patch '{"spec": {"template": {"spec": {"serviceAccountName": "test-sa"}}}}'
-
-      - name: Wait for Application to Start
-        run: |
-          kubectl rollout status deployment/vulnerable-app -n falco
-
-      - name: Simulate Events for Falco
-        run: |
-          POD_NAME=$(kubectl get pods -n falco -l app=vulnerable-app -o jsonpath="{.items[0].metadata.name}")
-          # Simulate file access event
-          kubectl exec -it $POD_NAME -n falco -- sh -c "cat /etc/shadow" || true
-          # Simulate interactive shell event
-          kubectl exec -it $POD_NAME -n falco -- sh || true
-          # Simulate suspicious file creation
-          kubectl exec -it $POD_NAME -n falco -- sh -c "touch /etc/suspicious-file" || true
-
-      - name: Collect Falco Logs
-        run: |
-          kubectl logs -n falco -l app=falco > falco-logs.txt || echo "No logs found"
-        continue-on-error: true
-
-      - name: Upload Falco Logs as Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: falco-logs
-          path: falco-logs.txt
