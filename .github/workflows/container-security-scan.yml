@@ -73,9 +73,10 @@ jobs:
         run: |
           kubectl wait --for=condition=ready pod -l app=falco -n falco --timeout=120s || echo "Falco pods not ready"
 
-      - name: Simulate Falco Events
+      - name: Deploy Simulate Pod and Trigger Events
         run: |
-          kubectl run simulate-pod --image=alpine:latest --restart=Never -n falco -- sh -c "cat /etc/passwd || true"
+          kubectl run simulate-pod --image=alpine:latest --restart=Never -n falco \
+            --serviceaccount=simulate-sa -- sh -c "cat /etc/passwd || true"
           POD_NAME=$(kubectl get pods -n falco -l run=simulate-pod -o jsonpath="{.items[0].metadata.name}")
           kubectl exec -n falco $POD_NAME -- sh -c "touch /root/suspicious-file || true"
           kubectl delete pod simulate-pod -n falco --force --grace-period=0 || true
