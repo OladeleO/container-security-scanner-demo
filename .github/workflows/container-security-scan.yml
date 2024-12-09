@@ -65,7 +65,7 @@ jobs:
             --clusterrole=cluster-admin \
             --serviceaccount=falco:test-sa
 
-      - name: Deploy Vulnerable Container
+      - name: Deploy Vulnerable Application
         run: |
           kubectl create deployment vulnerable-app \
             --image=vulnerables/web-dvwa:latest \
@@ -75,12 +75,19 @@ jobs:
             --patch '{"spec": {"template": {"spec": {"serviceAccountName": "test-sa"}}}}'
 
       - name: Wait for Application to Start
-        run: kubectl rollout status deployment/vulnerable-app -n falco
-
-      - name: Generate Falco Events
         run: |
-          kubectl exec -it $(kubectl get pods -n falco -l app=vulnerable-app -o jsonpath="{.items[0].metadata.name}") -n falco -- sh -c "cat /etc/shadow" || true
-      
+          kubectl rollout status deployment/vulnerable-app -n falco
+
+      - name: Simulate Events for Falco
+        run: |
+          POD_NAME=$(kubectl get pods -n falco -l app=vulnerable-app -o jsonpath="{.items[0].metadata.name}")
+          # Simulate file access event
+          kubectl exec -it $POD_NAME -n falco -- sh -c "cat /etc/shadow" || true
+          # Simulate interactive shell event
+          kubectl exec -it $POD_NAME -n falco -- sh || true
+          # Simulate suspicious file creation
+          kubectl exec -it $POD_NAME -n falco -- sh -c "touch /etc/suspicious-file" || true
+
       - name: Collect Falco Logs
         run: |
           kubectl logs -n falco -l app=falco > falco-logs.txt
