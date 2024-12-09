@@ -24,9 +24,13 @@ jobs:
       - name: Verify Trivy Installation
         run: trivy --version
 
-      - name: Run Trivy Scan
-        run: trivy image vulnerable-container:latest
+      - name: Pull Vulnerable Image
+        run: docker pull vulnerables/web-dvwa:latest
 
+      - name: Run Trivy Scan
+        run: trivy image vulnerables/web-dvwa:latest
+
+        
   dynamic-scan:
     name: Dynamic Scan with Falco
     runs-on: ubuntu-latest
