@@ -46,7 +46,16 @@ jobs:
           curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
           chmod +x ./kind
           sudo mv ./kind /usr/local/bin/kind
-          kind create cluster
+          cat <<EOF | kind create cluster --config=-
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          nodes:
+            - role: control-plane
+              extraPortMappings:
+                - containerPort: 30000
+                  hostPort: 30000
+                  protocol: TCP
+          EOF
 
       - name: Install Helm
         run: |
@@ -62,10 +71,9 @@ jobs:
 
       - name: Verify Falco Deployment
         run: |
-          echo "Verifying Falco pods"
+          echo "Checking Falco deployment in falco namespace"
           kubectl get pods -n falco
           kubectl get deployment falco -n falco
-          kubectl get events -n falco || true
 
       - name: Deploy Vulnerable Application
         run: |
