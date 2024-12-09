@@ -38,7 +38,7 @@ jobs:
 
         
   dynamic-scan:
-    name: Collect Falco Logs
+    name: Generate Falco Logs and Upload as Artifact
     runs-on: ubuntu-latest
     steps:
       - name: Setup Kubernetes Cluster (using kind)
@@ -67,21 +67,28 @@ jobs:
           helm install falco falcosecurity/falco --namespace falco --create-namespace \
             --set falco.json_output=true \
             --set falco.ebpf.enabled=true \
-            --debug
+            --set falco.log_level=debug
 
-      - name: Debug Helm Installation
+      - name: Wait for Falco Pods
         run: |
-          echo "Listing Helm releases in falco namespace"
-          helm list -n falco
-          echo "Checking Falco Helm release status"
-          helm status falco -n falco || echo "Falco Helm release not found"
+          echo "Waiting for Falco pods to become ready..."
+          kubectl wait --for=condition=ready pod -l app=falco -n falco --timeout=120s || echo "Falco pods not ready"
 
-      - name: Check Kubernetes Events
+      - name: Simulate Falco Events
         run: |
-          echo "Checking events in falco namespace"
-          kubectl get events -n falco || echo "No events found in falco namespace"
+          kubectl run simulate-pod --image=alpine:latest --restart=Never -n falco -- sh -c "touch /etc/suspicious-file || true"
+          POD_NAME=$(kubectl get pods -n falco -l run=simulate-pod -o jsonpath="{.items[0].metadata.name}")
+          kubectl exec -n falco $POD_NAME -- sh -c "cat /etc/shadow || true"
+          kubectl delete pod simulate-pod -n falco --force --grace-period=0 || true
 
-      - name: Wait for Falco Deployment
+      - name: Collect Falco Logs
         run: |
-          echo "Waiting for Falco to start..."
-          kubectl rollout status deployment/falco -n falco || echo "Falco deployment not found"
+          echo "Collecting Falco logs..."
+          kubectl logs -n falco -l app=falco > falco-logs.txt || echo "No logs found"
+        continue-on-error: true
+
+      - name: Upload Falco Logs as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: falco-logs
+          path: falco-logs.txt
