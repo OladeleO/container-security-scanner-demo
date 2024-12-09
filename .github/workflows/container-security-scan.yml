@@ -69,21 +69,38 @@ jobs:
             --set falco.ebpf.enabled=true \
             --set falco.log_level=debug
 
+      - name: Create Service Account for Simulate Pod
+        run: |
+          kubectl create serviceaccount simulate-sa -n falco
+          kubectl create clusterrolebinding simulate-sa-binding \
+            --clusterrole=cluster-admin \
+            --serviceaccount=falco:simulate-sa
+
       - name: Wait for Falco Pods
         run: |
           kubectl wait --for=condition=ready pod -l app=falco -n falco --timeout=120s || echo "Falco pods not ready"
 
-      - name: Deploy Simulate Pod and Trigger Events
+      - name: Deploy Simulate Pod
         run: |
-          kubectl run simulate-pod --image=alpine:latest --restart=Never -n falco \
-            --serviceaccount=simulate-sa -- sh -c "cat /etc/passwd || true"
-          POD_NAME=$(kubectl get pods -n falco -l run=simulate-pod -o jsonpath="{.items[0].metadata.name}")
-          kubectl exec -n falco $POD_NAME -- sh -c "touch /root/suspicious-file || true"
-          kubectl delete pod simulate-pod -n falco --force --grace-period=0 || true
+          cat <<EOF | kubectl apply -f -
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: simulate-pod
+            namespace: falco
+          labels:
+            run: simulate-pod
+          spec:
+            serviceAccountName: simulate-sa
+            containers:
+            - name: simulate-container
+              image: alpine:latest
+              command: ["/bin/sh", "-c"]
+              args: ["cat /etc/passwd; touch /root/suspicious-file; sleep 10"]
+          EOF
 
       - name: Collect Falco Logs
         run: |
-          echo "Collecting Falco logs..."
           kubectl logs -n falco -l app=falco > falco-logs.txt || echo "No logs found"
         continue-on-error: true
 
