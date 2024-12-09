@@ -54,8 +54,6 @@ jobs:
               extraMounts:
                 - hostPath: /lib/modules
                   containerPath: /lib/modules
-                - hostPath: /proc
-                  containerPath: /host/proc
           EOF
 
       - name: Install Helm
@@ -70,16 +68,25 @@ jobs:
             --set falco.json_output=true \
             --set falco.ebpf.enabled=true
 
-      - name: Debug Helm Installation
-        run: |
-          helm list -n falco
-          helm status falco -n falco
-
-      - name: Check Kubernetes Events
-        run: |
-          kubectl get events -n falco || echo "No events found in falco namespace"
-
       - name: Wait for Falco Deployment
         run: |
-          kubectl rollout status deployment/falco -n falco || echo "Falco deployment not available"
-          kubectl get pods -n falco
+          echo "Waiting for Falco to start..."
+          kubectl rollout status deployment/falco -n falco
+
+      - name: Simulate Falco Events
+        run: |
+          kubectl run simulate-pod --image=alpine:latest --restart=Never -n falco -- sh -c "touch /etc/suspicious-file || true"
+          POD_NAME=$(kubectl get pods -n falco -l run=simulate-pod -o jsonpath="{.items[0].metadata.name}")
+          kubectl exec -n falco $POD_NAME -- sh -c "cat /etc/shadow || true"
+
+      - name: Collect Falco Logs
+        run: |
+          echo "Collecting Falco logs..."
+          kubectl logs -n falco -l app=falco > falco-logs.txt || echo "No logs found"
+        continue-on-error: true
+
+      - name: Upload Falco Logs as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: falco-logs
+          path: falco-logs.txt
