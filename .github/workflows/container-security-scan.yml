@@ -68,5 +68,16 @@ jobs:
             -n falco \
             --patch '{"spec": {"template": {"spec": {"serviceAccountName": "test-sa"}}}}'
 
-      - name: Monitor Runtime with Falco
-        run: kubectl logs -n falco -l app=falco
+      - name: Wait for Application to Start
+        run: kubectl rollout status deployment/vulnerable-app -n falco
+
+      - name: Collect Falco Logs
+        run: |
+          kubectl logs -n falco -l app=falco > falco-logs.txt
+        continue-on-error: true
+
+      - name: Upload Logs as Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: falco-logs
+          path: falco-logs.txt
