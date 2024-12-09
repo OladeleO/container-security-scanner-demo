@@ -101,6 +101,7 @@ jobs:
 
       - name: Collect Falco Logs
         run: |
+          echo "Collecting Falco logs..."
           kubectl logs -n falco -l app=falco > falco-logs.txt || echo "No logs found"
         continue-on-error: true
 
