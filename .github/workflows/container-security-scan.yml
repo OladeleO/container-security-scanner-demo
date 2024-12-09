@@ -54,8 +54,6 @@ jobs:
               extraMounts:
                 - hostPath: /proc
                   containerPath: /host/proc
-                - hostPath: /lib/modules
-                  containerPath: /lib/modules
           EOF
 
       - name: Install Helm
