@@ -88,8 +88,8 @@ jobs:
           metadata:
             name: simulate-pod
             namespace: falco
-          labels:
-            run: simulate-pod
+            labels:
+              run: simulate-pod
           spec:
             serviceAccountName: simulate-sa
             containers:
